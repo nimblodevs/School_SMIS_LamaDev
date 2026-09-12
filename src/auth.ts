@@ -1,5 +1,6 @@
 import NextAuth, { type NextAuthOptions, getServerSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { unstable_rethrow } from "next/navigation";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/prisma";
 
@@ -95,6 +96,7 @@ export async function auth() {
     try {
         return await getServerSession(authOptions);
     } catch (error) {
+        unstable_rethrow(error);
         console.warn("Invalid or stale NextAuth session detected. Falling back to an unauthenticated state.", error);
         return null;
     }

@@ -12,10 +12,11 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 const SingleStudentPage = async ({
-  params: { id },
+  params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) => {
+  const { id } = await params;
   const session = await auth();
   const role = session?.user?.role;
 
@@ -149,9 +150,11 @@ const SingleStudentPage = async ({
           </div>
         </div>
         {/* BOTTOM */}
-        <div className="mt-4 bg-white rounded-md p-4 h-[800px]">
-          <h1>Student&apos;s Schedule</h1>
-          <BigCalendarContainer type="classId" id={student.class.id} />
+        <div className="mt-4 bg-white rounded-md p-4 h-[500px] flex flex-col">
+          <h1 className="text-xl font-semibold mb-4">Student&apos;s Schedule</h1>
+          <div className="flex-1 min-h-0">
+            <BigCalendarContainer type="classId" id={student.class.id} />
+          </div>
         </div>
       </div>
       {/* RIGHT */}
