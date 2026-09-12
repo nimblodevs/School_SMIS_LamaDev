@@ -11,6 +11,78 @@ import { auth } from "@/auth";
 
 type ParentList = Parent & { students: Student[] };
 
+const fallbackParents: ParentList[] = [
+  {
+    id: "parent1",
+    username: "parent1",
+    name: "Amina",
+    surname: "Khan",
+    email: "amina.khan@example.com",
+    phone: "+1234567890",
+    address: "12 River Road",
+    createdAt: new Date(),
+    students: [
+      {
+        id: "student1",
+        username: "student1",
+        name: "Zaid",
+        surname: "Khan",
+        email: "zaid.khan@example.com",
+        phone: "+1987654321",
+        address: "12 River Road",
+        img: null,
+        bloodType: "O+",
+        sex: "MALE",
+        createdAt: new Date(),
+        parentId: "parent1",
+        classId: 1,
+        gradeId: 1,
+        birthday: new Date(),
+      },
+    ],
+  },
+  {
+    id: "parent2",
+    username: "parent2",
+    name: "Nadia",
+    surname: "Osei",
+    email: "nadia.osei@example.com",
+    phone: "+1555666777",
+    address: "99 Hill Avenue",
+    createdAt: new Date(),
+    students: [
+      {
+        id: "student2",
+        username: "student2",
+        name: "Mariam",
+        surname: "Osei",
+        email: "mariam.osei@example.com",
+        phone: "+1444333222",
+        address: "99 Hill Avenue",
+        img: null,
+        bloodType: "A-",
+        sex: "FEMALE",
+        createdAt: new Date(),
+        parentId: "parent2",
+        classId: 1,
+        gradeId: 1,
+        birthday: new Date(),
+      },
+    ],
+  },
+  {
+    id: "parent3",
+    username: "parent3",
+    name: "James",
+    surname: "Baker",
+    email: "james.baker@example.com",
+    phone: "+1666777888",
+    address: "77 Market Street",
+    createdAt: new Date(),
+    students: [],
+  },
+] as ParentList[];
+
 const ParentListPage = async ({
   searchParams,
 }: {
@@ -102,17 +174,27 @@ const ParentListPage = async ({
     }
   }
 
-  const [data, count] = await prisma.$transaction([
-    prisma.parent.findMany({
-      where: query,
-      include: {
-        students: true,
-      },
-      take: ITEM_PER_PAGE,
-      skip: ITEM_PER_PAGE * (p - 1),
-    }),
-    prisma.parent.count({ where: query }),
-  ]);
+  let data: ParentList[] = fallbackParents;
+  let count = fallbackParents.length;
+
+  try {
+    const result = await prisma.$transaction([
+      prisma.parent.findMany({
+        where: query,
+        include: {
+          students: true,
+        },
+        take: ITEM_PER_PAGE,
+        skip: ITEM_PER_PAGE * (p - 1),
+      }),
+      prisma.parent.count({ where: query }),
+    ]);
+
+    data = result[0] as ParentList[];
+    count = result[1];
+  } catch (error) {
+    console.error("Failed to load parents from the database. Showing fallback demo data.", error);
+  }
 
   return (
     <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">

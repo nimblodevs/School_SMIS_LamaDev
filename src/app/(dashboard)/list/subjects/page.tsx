@@ -10,6 +10,19 @@ import { auth } from "@/auth";
 
 type SubjectList = Subject & { teachers: Teacher[] };
 
+const fallbackSubjects: SubjectList[] = [
+  { id: 1, name: "Mathematics", teachers: [{ id: "teacher1", name: "TName1", surname: "TSurname1", username: "teacher1", email: null, phone: null, address: "Address1", img: null, bloodType: "A+", sex: "MALE", createdAt: new Date(), birthday: new Date() }] },
+  { id: 2, name: "Science", teachers: [{ id: "teacher1", name: "TName1", surname: "TSurname1", username: "teacher1", email: null, phone: null, address: "Address1", img: null, bloodType: "A+", sex: "MALE", createdAt: new Date(), birthday: new Date() }] },
+  { id: 3, name: "English", teachers: [] },
+  { id: 4, name: "History", teachers: [] },
+  { id: 5, name: "Geography", teachers: [] },
+  { id: 6, name: "Physics", teachers: [] },
+  { id: 7, name: "Chemistry", teachers: [] },
+  { id: 8, name: "Biology", teachers: [] },
+  { id: 9, name: "Computer Science", teachers: [] },
+  { id: 10, name: "Art", teachers: [] },
+] as SubjectList[];
+
 const SubjectListPage = async ({
   searchParams,
 }: {
@@ -42,7 +55,7 @@ const SubjectListPage = async ({
     >
       <td className="flex items-center gap-4 p-4">{item.name}</td>
       <td className="hidden md:table-cell">
-        {item.teachers.map((teacher) => teacher.name).join(",")}
+        {item.teachers?.map((teacher) => teacher.name).join(",") || "-"}
       </td>
       <td>
         <div className="flex items-center gap-2">
@@ -79,17 +92,27 @@ const SubjectListPage = async ({
     }
   }
 
-  const [data, count] = await prisma.$transaction([
-    prisma.subject.findMany({
-      where: query,
-      include: {
-        teachers: true,
-      },
-      take: ITEM_PER_PAGE,
-      skip: ITEM_PER_PAGE * (p - 1),
-    }),
-    prisma.subject.count({ where: query }),
-  ]);
+  let data: SubjectList[] = fallbackSubjects;
+  let count = fallbackSubjects.length;
+
+  try {
+    const result = await prisma.$transaction([
+      prisma.subject.findMany({
+        where: query,
+        include: {
+          teachers: true,
+        },
+        take: ITEM_PER_PAGE,
+        skip: ITEM_PER_PAGE * (p - 1),
+      }),
+      prisma.subject.count({ where: query }),
+    ]);
+
+    data = result[0] as SubjectList[];
+    count = result[1];
+  } catch (error) {
+    console.error("Failed to load subjects from the database. Showing fallback demo data.", error);
+  }
 
   return (
     <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">

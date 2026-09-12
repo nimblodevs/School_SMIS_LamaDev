@@ -5,6 +5,7 @@ import {
   ClassSchema,
   ExamSchema,
   LessonSchema,
+  ParentSchema,
   StudentSchema,
   SubjectSchema,
   TeacherSchema,
@@ -222,6 +223,94 @@ export const deleteTeacher = async (
     });
 
     // revalidatePath("/list/teachers");
+    return { success: true, error: false };
+  } catch (err) {
+    console.log(err);
+    return { success: false, error: true };
+  }
+};
+
+export const createParent = async (
+  currentState: CurrentState,
+  data: ParentSchema
+) => {
+  try {
+    const parent = await prisma.parent.create({
+      data: {
+        id: data.username,
+        username: data.username,
+        name: data.name,
+        surname: data.surname,
+        email: data.email || null,
+        phone: data.phone,
+        address: data.address,
+      },
+    });
+
+    if (data.studentId) {
+      await prisma.student.update({
+        where: { id: data.studentId },
+        data: { parentId: parent.id },
+      });
+    }
+
+    return { success: true, error: false };
+  } catch (err) {
+    console.log(err);
+    return { success: false, error: true };
+  }
+};
+
+export const updateParent = async (
+  currentState: CurrentState,
+  data: ParentSchema
+) => {
+  if (!data.id) {
+    return { success: false, error: true };
+  }
+
+  try {
+    await prisma.parent.update({
+      where: {
+        id: data.id,
+      },
+      data: {
+        username: data.username,
+        name: data.name,
+        surname: data.surname,
+        email: data.email || null,
+        phone: data.phone,
+        address: data.address,
+      },
+    });
+
+    if (data.studentId) {
+      await prisma.student.update({
+        where: { id: data.studentId },
+        data: { parentId: data.id },
+      });
+    }
+
+    return { success: true, error: false };
+  } catch (err) {
+    console.log(err);
+    return { success: false, error: true };
+  }
+};
+
+export const deleteParent = async (
+  currentState: CurrentState,
+  data: FormData
+) => {
+  const id = data.get("id") as string;
+
+  try {
+    await prisma.parent.delete({
+      where: {
+        id: id,
+      },
+    });
+
     return { success: true, error: false };
   } catch (err) {
     console.log(err);

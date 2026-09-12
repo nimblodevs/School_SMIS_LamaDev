@@ -4,6 +4,7 @@ import {
   deleteClass,
   deleteExam,
   deleteLesson,
+  deleteParent,
   deleteStudent,
   deleteSubject,
   deleteTeacher,
@@ -29,8 +30,8 @@ const deleteActionMap = {
   student: deleteStudent,
   exam: deleteExam,
   lesson: deleteLesson,
+  parent: deleteParent,
   // TODO: OTHER DELETE ACTIONS
-  parent: deleteSubject,
   assignment: deleteSubject,
   result: deleteSubject,
   attendance: deleteSubject,
@@ -59,6 +60,9 @@ const ExamForm = dynamic(() => import("./forms/ExamForm"), {
   loading: () => <h1>Loading...</h1>,
 });
 const LessonForm = dynamic(() => import("./forms/LessonForm"), {
+  loading: () => <h1>Loading...</h1>,
+});
+const ParentForm = dynamic(() => import("./forms/ParentForm"), {
   loading: () => <h1>Loading...</h1>,
 });
 // TODO: OTHER FORMS
@@ -119,6 +123,14 @@ const forms: {
       relatedData={relatedData}
     />
   ),
+  parent: (setOpen, type, data, relatedData) => (
+    <ParentForm
+      type={type}
+      data={data}
+      setOpen={setOpen}
+      relatedData={relatedData}
+    />
+  ),
 };
 
 const FormModal = ({
@@ -138,8 +150,33 @@ const FormModal = ({
 
   const [open, setOpen] = useState(false);
 
+  const UnsupportedForm = ({
+    label,
+  }: {
+    label: string;
+  }) => (
+    <div className="p-4 flex flex-col items-center justify-center gap-4 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-2xl">
+        ⚠️
+      </div>
+      <div>
+        <h2 className="text-lg font-semibold text-gray-800">{label}</h2>
+        <p className="mt-2 text-sm text-gray-500">
+          This {table} {type} action is not available yet.
+        </p>
+      </div>
+      <button
+        className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white"
+        onClick={() => setOpen(false)}
+      >
+        Close
+      </button>
+    </div>
+  );
+
   const Form = () => {
-    const [state, formAction] = useActionState(deleteActionMap[table], {
+    const deleteAction = deleteActionMap[table as keyof typeof deleteActionMap];
+    const [state, formAction] = useActionState(deleteAction ?? (() => ({ success: false, error: true })), {
       success: false,
       error: false,
     });
@@ -154,21 +191,33 @@ const FormModal = ({
       }
     }, [state, router]);
 
-    return type === "delete" && id ? (
-      <form action={formAction} className="p-4 flex flex-col gap-4">
-        <input type="text | number" name="id" value={id} hidden />
-        <span className="text-center font-medium">
-          All data will be lost. Are you sure you want to delete this {table}?
-        </span>
-        <button className="bg-red-700 text-white py-2 px-4 rounded-md border-none w-max self-center">
-          Delete
-        </button>
-      </form>
-    ) : (type === "create" || type === "update") && forms[table] ? (
-      forms[table](setOpen, type, data, relatedData)
-    ) : (
-      "Form not found!"
-    );
+    if (type === "delete") {
+      if (!id) {
+        return <UnsupportedForm label="Missing record" />;
+      }
+
+      if (!deleteAction) {
+        return <UnsupportedForm label="Delete form unavailable" />;
+      }
+
+      return (
+        <form action={formAction} className="p-4 flex flex-col gap-4">
+          <input type="text | number" name="id" value={id} hidden />
+          <span className="text-center font-medium">
+            All data will be lost. Are you sure you want to delete this {table}?
+          </span>
+          <button className="bg-red-700 text-white py-2 px-4 rounded-md border-none w-max self-center">
+            Delete
+          </button>
+        </form>
+      );
+    }
+
+    if (!forms[table]) {
+      return <UnsupportedForm label="Form unavailable" />;
+    }
+
+    return forms[table](setOpen, type, data, relatedData);
   };
 
   return (

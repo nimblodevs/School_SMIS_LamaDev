@@ -93,10 +93,10 @@ const TeacherListPage = async ({
               <Image src="/view.png" alt="" width={16} height={16} />
             </button>
           </Link>
+          {(role === "admin" || (role === "teacher" && session?.user?.id === item.id)) && (
+            <FormContainer table="teacher" type="update" data={item} />
+          )}
           {role === "admin" && (
-            // <button className="w-7 h-7 flex items-center justify-center rounded-full bg-lamaPurple">
-            //   <Image src="/delete.png" alt="" width={16} height={16} />
-            // </button>
             <FormContainer table="teacher" type="delete" id={item.id} />
           )}
         </div>
