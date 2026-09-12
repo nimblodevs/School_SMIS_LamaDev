@@ -23,24 +23,24 @@ const SingleTeacherPage = async ({
 
   const teacher:
     | (Teacher & {
-        subjects: { name: string }[];
-        lessons: { id: number }[];
-        classes: { id: number; name: string }[];
-      })
+      subjects: { name: string }[];
+      lessons: { id: number }[];
+      classes: { id: number; name: string }[];
+    })
     | null = await prisma.teacher.findUnique({
-    where: { id },
-    include: {
-      subjects: {
-        select: { name: true },
+      where: { id },
+      include: {
+        subjects: {
+          select: { name: true },
+        },
+        lessons: {
+          select: { id: true },
+        },
+        classes: {
+          select: { id: true, name: true },
+        },
       },
-      lessons: {
-        select: { id: true },
-      },
-      classes: {
-        select: { id: true, name: true },
-      },
-    },
-  });
+    });
 
   if (!teacher) {
     return notFound();
