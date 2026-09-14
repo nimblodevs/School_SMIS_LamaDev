@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import FormModal from "./FormModal";
-import { auth } from "@/auth";
+import { requirePageUser } from "@/lib/authorization";
+import type { UserRole } from "@/lib/routeAccess";
 
 export type FormContainerProps = {
   table:
@@ -17,17 +18,21 @@ export type FormContainerProps = {
   | "event"
   | "announcement";
   type: "create" | "update" | "delete";
-  data?: any;
+  data?: unknown;
   id?: number | string;
 };
 
 const FormContainer = async ({ table, type, data, id }: FormContainerProps) => {
   let relatedData = {};
 
-  const session = await auth();
-  const userId = session?.user?.id;
-  const role = session?.user?.role;
-  const currentUserId = userId;
+  const allowedRoles: readonly UserRole[] =
+    table === "exam" || table === "assignment" || table === "result" ||
+    (table === "teacher" && type === "update")
+      ? ["admin", "teacher"]
+      : ["admin"];
+  const user = await requirePageUser(allowedRoles);
+  const role = user.role;
+  const currentUserId = user.id;
 
   if (type !== "delete") {
     switch (table) {

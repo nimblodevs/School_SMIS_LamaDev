@@ -1,7 +1,6 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
@@ -26,7 +25,7 @@ export default function SignInPage() {
       return;
     }
 
-    router.push("/admin");
+    router.push("/");
     router.refresh();
   };
 
@@ -67,7 +66,7 @@ export default function SignInPage() {
           </button>
         </form>
         <p className="mt-4 text-center text-sm text-slate-600">
-          Need an account? <Link href="/sign-up" className="text-blue-500">Create one</Link>
+          Need an account? Contact your school administrator.
         </p>
       </div>
     </div>

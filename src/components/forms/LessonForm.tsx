@@ -14,6 +14,13 @@ import {
 } from "react";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
+import type { Class, Lesson, Subject, Teacher } from "@prisma/client";
+
+type LessonRelatedData = {
+  subjects: Pick<Subject, "id" | "name">[];
+  classes: Pick<Class, "id" | "name">[];
+  teachers: Pick<Teacher, "id" | "name" | "surname">[];
+};
 
 const DAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"] as const;
 
@@ -28,15 +35,21 @@ const toDateTimeLocal = (value?: Date | string) => {
 
 const LessonForm = ({
   type,
-  data,
+  data: rawData,
   setOpen,
-  relatedData,
+  relatedData: rawRelatedData,
 }: {
   type: "create" | "update";
-  data?: any;
+  data?: unknown;
   setOpen: Dispatch<SetStateAction<boolean>>;
-  relatedData?: any;
+  relatedData?: unknown;
 }) => {
+  const data = rawData as Lesson | undefined;
+  const relatedData = (rawRelatedData ?? {
+    subjects: [],
+    classes: [],
+    teachers: [],
+  }) as LessonRelatedData;
   const {
     register,
     handleSubmit,
@@ -69,7 +82,7 @@ const LessonForm = ({
     }
   }, [state, router, type, setOpen]);
 
-  const { subjects = [], classes = [], teachers = [] } = relatedData || {};
+  const { subjects, classes, teachers } = relatedData;
 
   return (
     <form className="flex flex-col gap-8" onSubmit={onSubmit}>

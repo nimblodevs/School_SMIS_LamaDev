@@ -6,14 +6,10 @@ import InputField from "../InputField";
 import {
   classSchema,
   ClassSchema,
-  subjectSchema,
-  SubjectSchema,
 } from "@/lib/formValidationSchemas";
 import {
   createClass,
-  createSubject,
   updateClass,
-  updateSubject,
 } from "@/lib/actions";
 import {
   Dispatch,
@@ -24,18 +20,26 @@ import {
 } from "react";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
+import type { Class, Grade, Teacher } from "@prisma/client";
+
+type ClassRelatedData = {
+  teachers: Pick<Teacher, "id" | "name" | "surname">[];
+  grades: Pick<Grade, "id" | "level">[];
+};
 
 const ClassForm = ({
   type,
-  data,
+  data: rawData,
   setOpen,
-  relatedData,
+  relatedData: rawRelatedData,
 }: {
   type: "create" | "update";
-  data?: any;
+  data?: unknown;
   setOpen: Dispatch<SetStateAction<boolean>>;
-  relatedData?: any;
+  relatedData?: unknown;
 }) => {
+  const data = rawData as Class | undefined;
+  const relatedData = (rawRelatedData ?? { teachers: [], grades: [] }) as ClassRelatedData;
   const {
     register,
     handleSubmit,
@@ -108,14 +112,14 @@ const ClassForm = ({
           <select
             className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full"
             {...register("supervisorId")}
-            defaultValue={data?.teachers}
+            defaultValue={data?.supervisorId ?? ""}
           >
+            <option value="">No supervisor</option>
             {teachers.map(
               (teacher: { id: string; name: string; surname: string }) => (
                 <option
                   value={teacher.id}
                   key={teacher.id}
-                  selected={data && teacher.id === data.supervisorId}
                 >
                   {teacher.name + " " + teacher.surname}
                 </option>
@@ -139,7 +143,6 @@ const ClassForm = ({
               <option
                 value={grade.id}
                 key={grade.id}
-                selected={data && grade.id === data.gradeId}
               >
                 {grade.level}
               </option>

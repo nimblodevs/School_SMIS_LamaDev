@@ -6,9 +6,9 @@ import prisma from "@/lib/prisma";
 import { ITEM_PER_PAGE } from "@/lib/settings";
 import { Class, Prisma, Teacher } from "@prisma/client";
 import Image from "next/image";
-import { auth } from "@/auth";
+import { requirePageUser } from "@/lib/authorization";
 
-type ClassList = Class & { supervisor: Teacher };
+type ClassList = Class & { supervisor: Teacher | null };
 
 const ClassListPage = async ({
   searchParams,
@@ -16,8 +16,8 @@ const ClassListPage = async ({
   searchParams: Promise<{ [key: string]: string | undefined }>;
 }) => {
   const params = await searchParams;
-  const session = await auth();
-  const role = session?.user?.role;
+  const user = await requirePageUser(["admin", "teacher"]);
+  const role = user.role;
 
 
   const columns = [
@@ -59,7 +59,9 @@ const ClassListPage = async ({
       <td className="hidden md:table-cell">{item.capacity}</td>
       <td className="hidden md:table-cell">{item.name[0]}</td>
       <td className="hidden md:table-cell">
-        {item.supervisor.name + " " + item.supervisor.surname}
+        {item.supervisor
+          ? `${item.supervisor.name} ${item.supervisor.surname}`
+          : "-"}
       </td>
       <td>
         <div className="flex items-center gap-2">

@@ -4,12 +4,14 @@ import Table from "@/components/Table";
 import TableSearch from "@/components/TableSearch";
 import prisma from "@/lib/prisma";
 import { ITEM_PER_PAGE } from "@/lib/settings";
-import { Class, Lesson, Prisma, Subject, Teacher } from "@prisma/client";
+import { Lesson, Prisma } from "@prisma/client";
 import Image from "next/image";
-import { auth } from "@/auth";
+import { requirePageUser } from "@/lib/authorization";
 
-type LessonList = Lesson & { subject: Subject } & { class: Class } & {
-  teacher: Teacher;
+type LessonList = Lesson & { subject: { name: string } } & {
+  class: { name: string };
+} & {
+  teacher: { name: string; surname: string };
 };
 
 
@@ -19,8 +21,8 @@ const LessonListPage = async ({
   searchParams: Promise<{ [key: string]: string | undefined }>;
 }) => {
   const params = await searchParams;
-  const session = await auth();
-  const role = session?.user?.role;
+  const user = await requirePageUser(["admin", "teacher"]);
+  const role = user.role;
 
 
   const columns = [

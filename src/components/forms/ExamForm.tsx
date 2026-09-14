@@ -6,14 +6,10 @@ import InputField from "../InputField";
 import {
   examSchema,
   ExamSchema,
-  subjectSchema,
-  SubjectSchema,
 } from "@/lib/formValidationSchemas";
 import {
   createExam,
-  createSubject,
   updateExam,
-  updateSubject,
 } from "@/lib/actions";
 import {
   Dispatch,
@@ -24,18 +20,32 @@ import {
 } from "react";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
+import type { Exam, Lesson } from "@prisma/client";
+
+type ExamRelatedData = { lessons: Pick<Lesson, "id" | "name">[] };
+
+const toDateTimeLocal = (value?: Date | string) => {
+  if (!value) return undefined;
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60 * 1000)
+    .toISOString()
+    .slice(0, 16);
+};
 
 const ExamForm = ({
   type,
-  data,
+  data: rawData,
   setOpen,
-  relatedData,
+  relatedData: rawRelatedData,
 }: {
   type: "create" | "update";
-  data?: any;
+  data?: unknown;
   setOpen: Dispatch<SetStateAction<boolean>>;
-  relatedData?: any;
+  relatedData?: unknown;
 }) => {
+  const data = rawData as Exam | undefined;
+  const relatedData = (rawRelatedData ?? { lessons: [] }) as ExamRelatedData;
   const {
     register,
     handleSubmit,
@@ -89,7 +99,7 @@ const ExamForm = ({
         <InputField
           label="Start Date"
           name="startTime"
-          defaultValue={data?.startTime}
+          defaultValue={toDateTimeLocal(data?.startTime)}
           register={register}
           error={errors?.startTime}
           type="datetime-local"
@@ -97,7 +107,7 @@ const ExamForm = ({
         <InputField
           label="End Date"
           name="endTime"
-          defaultValue={data?.endTime}
+          defaultValue={toDateTimeLocal(data?.endTime)}
           register={register}
           error={errors?.endTime}
           type="datetime-local"
@@ -117,7 +127,7 @@ const ExamForm = ({
           <select
             className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full"
             {...register("lessonId")}
-            defaultValue={data?.teachers}
+            defaultValue={data?.lessonId}
           >
             {lessons.map((lesson: { id: number; name: string }) => (
               <option value={lesson.id} key={lesson.id}>

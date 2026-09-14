@@ -1,31 +1,39 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
+import {
+  allowedRolesForPath,
+  homePathForRole,
+  isUserRole,
+} from "@/lib/routeAccess";
 
-const publicPaths = ["/", "/sign-in", "/sign-up", "/api/auth"];
-const protectedPrefixes = ["/admin", "/teacher", "/student", "/parent"];
+const publicPaths = ["/", "/sign-in", "/sign-up"];
 
 function matchesPath(pathname: string, path: string) {
   return pathname === path || pathname.startsWith(`${path}/`);
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const sessionToken =
-    request.cookies.get("next-auth.session-token") ||
-    request.cookies.get("__Secure-next-auth.session-token");
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
+  const role = isUserRole(token?.role) ? token.role : null;
 
   const isPublicPath = publicPaths.some((path) => matchesPath(pathname, path));
+  const allowedRoles = allowedRolesForPath(pathname);
 
-  if (sessionToken && isPublicPath) {
-    return NextResponse.redirect(new URL("/admin", request.url));
+  if (token && role && isPublicPath) {
+    return NextResponse.redirect(new URL(homePathForRole(role), request.url));
   }
 
-  const isProtectedPath = protectedPrefixes.some((path) =>
-    matchesPath(pathname, path)
-  );
-
-  if (!sessionToken && isProtectedPath) {
+  if (allowedRoles && (!token || !role)) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
+  }
+
+  if (allowedRoles && role && !allowedRoles.includes(role)) {
+    return NextResponse.redirect(new URL(homePathForRole(role), request.url));
   }
 
   return NextResponse.next();
@@ -33,6 +41,6 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

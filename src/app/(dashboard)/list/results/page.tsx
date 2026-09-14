@@ -7,7 +7,7 @@ import { ITEM_PER_PAGE } from "@/lib/settings";
 import { Prisma } from "@prisma/client";
 import Image from "next/image";
 
-import { auth } from "@/auth";
+import { requirePageUser } from "@/lib/authorization";
 
 type ResultList = {
   id: number;
@@ -28,10 +28,9 @@ const ResultListPage = async ({
   searchParams: Promise<{ [key: string]: string | undefined }>;
 }) => {
   const params = await searchParams;
-  const session = await auth();
-  const userId = session?.user?.id;
-  const role = session?.user?.role;
-  const currentUserId = userId;
+  const user = await requirePageUser();
+  const role = user.role;
+  const currentUserId = user.id;
 
 
   const columns = [
@@ -79,7 +78,7 @@ const ResultListPage = async ({
       className="border-b border-gray-200 even:bg-slate-50 text-sm hover:bg-lamaPurpleLight"
     >
       <td className="flex items-center gap-4 p-4">{item.title}</td>
-      <td>{item.studentName + " " + item.studentName}</td>
+      <td>{item.studentName + " " + item.studentSurname}</td>
       <td className="hidden md:table-cell">{item.score}</td>
       <td className="hidden md:table-cell">
         {item.teacherName + " " + item.teacherSurname}
@@ -186,7 +185,7 @@ const ResultListPage = async ({
     prisma.result.count({ where: query }),
   ]);
 
-  const data = dataRes.map((item) => {
+  const data = dataRes.map((item): ResultList | null => {
     const assessment = item.exam || item.assignment;
 
     if (!assessment) return null;
@@ -204,7 +203,7 @@ const ResultListPage = async ({
       className: assessment.lesson.class.name,
       startTime: isExam ? assessment.startTime : assessment.startDate,
     };
-  });
+  }).filter((item): item is ResultList => item !== null);
 
   return (
     <div className="bg-white p-4 rounded-md flex-1 m-4 mt-0">

@@ -14,18 +14,26 @@ import {
 } from "react";
 import { toast } from "react-toastify";
 import { useRouter } from "next/navigation";
+import type { Subject, Teacher } from "@prisma/client";
+
+type SubjectFormData = Subject & { teachers?: Pick<Teacher, "id">[] };
+type SubjectRelatedData = {
+  teachers: Pick<Teacher, "id" | "name" | "surname">[];
+};
 
 const SubjectForm = ({
   type,
-  data,
+  data: rawData,
   setOpen,
-  relatedData,
+  relatedData: rawRelatedData,
 }: {
   type: "create" | "update";
-  data?: any;
+  data?: unknown;
   setOpen: Dispatch<SetStateAction<boolean>>;
-  relatedData?: any;
+  relatedData?: unknown;
 }) => {
+  const data = rawData as SubjectFormData | undefined;
+  const relatedData = (rawRelatedData ?? { teachers: [] }) as SubjectRelatedData;
   const {
     register,
     handleSubmit,
@@ -92,7 +100,7 @@ const SubjectForm = ({
             multiple
             className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full"
             {...register("teachers")}
-            defaultValue={data?.teachers}
+            defaultValue={data?.teachers?.map((teacher) => teacher.id)}
           >
             {teachers.map(
               (teacher: { id: string; name: string; surname: string }) => (

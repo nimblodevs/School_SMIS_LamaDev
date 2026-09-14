@@ -4,15 +4,15 @@ import Table from "@/components/Table";
 import TableSearch from "@/components/TableSearch";
 import prisma from "@/lib/prisma";
 import { ITEM_PER_PAGE } from "@/lib/settings";
-import { Class, Exam, Prisma, Subject, Teacher } from "@prisma/client";
+import { Exam, Prisma } from "@prisma/client";
 import Image from "next/image";
-import { auth } from "@/auth";
+import { requirePageUser } from "@/lib/authorization";
 
 type ExamList = Exam & {
   lesson: {
-    subject: Subject;
-    class: Class;
-    teacher: Teacher;
+    subject: { name: string };
+    class: { name: string };
+    teacher: { name: string; surname: string };
   };
 };
 
@@ -22,10 +22,9 @@ const ExamListPage = async ({
   searchParams: Promise<{ [key: string]: string | undefined }>;
 }) => {
   const params = await searchParams;
-  const session = await auth();
-  const userId = session?.user?.id;
-  const role = session?.user?.role;
-  const currentUserId = userId;
+  const user = await requirePageUser();
+  const role = user.role;
+  const currentUserId = user.id;
 
 
   const columns = [

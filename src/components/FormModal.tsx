@@ -2,7 +2,9 @@
 
 import {
   deleteClass,
+  deleteAnnouncement,
   deleteExam,
+  deleteEvent,
   deleteLesson,
   deleteParent,
   deleteStudent,
@@ -13,36 +15,27 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
-  Dispatch,
-  ReactElement,
-  SetStateAction,
+  type Dispatch,
+  type ReactElement,
+  type SetStateAction,
   useActionState,
   useEffect,
   useState,
 } from "react";
 import { toast } from "react-toastify";
-import { FormContainerProps } from "./FormContainer";
+import type { FormContainerProps } from "./FormContainer";
 
-const deleteActionMap = {
-  subject: deleteSubject,
-  class: deleteClass,
-  teacher: deleteTeacher,
-  student: deleteStudent,
-  exam: deleteExam,
-  lesson: deleteLesson,
-  parent: deleteParent,
-  // TODO: OTHER DELETE ACTIONS
-  assignment: deleteSubject,
-  result: deleteSubject,
-  attendance: deleteSubject,
-  event: deleteSubject,
-  announcement: deleteSubject,
-};
-
-// USE LAZY LOADING
-
-// import TeacherForm from "./forms/TeacherForm";
-// import StudentForm from "./forms/StudentForm";
+type ActionState = { success: boolean; error: boolean };
+type DeleteAction = (
+  state: ActionState,
+  data: FormData
+) => Promise<ActionState>;
+type FormFactory = (
+  setOpen: Dispatch<SetStateAction<boolean>>,
+  type: "create" | "update",
+  data?: unknown,
+  relatedData?: unknown
+) => ReactElement;
 
 const TeacherForm = dynamic(() => import("./forms/TeacherForm"), {
   loading: () => <h1>Loading...</h1>,
@@ -65,16 +58,8 @@ const LessonForm = dynamic(() => import("./forms/LessonForm"), {
 const ParentForm = dynamic(() => import("./forms/ParentForm"), {
   loading: () => <h1>Loading...</h1>,
 });
-// TODO: OTHER FORMS
 
-const forms: {
-  [key: string]: (
-    setOpen: Dispatch<SetStateAction<boolean>>,
-    type: "create" | "update",
-    data?: any,
-    relatedData?: any
-  ) => ReactElement;
-} = {
+const forms: Partial<Record<FormContainerProps["table"], FormFactory>> = {
   subject: (setOpen, type, data, relatedData) => (
     <SubjectForm
       type={type}
@@ -133,28 +118,37 @@ const forms: {
   ),
 };
 
-const FormModal = ({
+const deleteActionMap: Partial<
+  Record<FormContainerProps["table"], DeleteAction>
+> = {
+  subject: deleteSubject,
+  class: deleteClass,
+  teacher: deleteTeacher,
+  student: deleteStudent,
+  exam: deleteExam,
+  lesson: deleteLesson,
+  parent: deleteParent,
+  event: deleteEvent,
+  announcement: deleteAnnouncement,
+};
+
+const unsupportedDeleteAction: DeleteAction = async () => ({
+  success: false,
+  error: true,
+});
+
+function UnsupportedForm({
+  label,
   table,
   type,
-  data,
-  id,
-  relatedData,
-}: FormContainerProps & { relatedData?: any }) => {
-  const size = type === "create" ? "w-8 h-8" : "w-7 h-7";
-  const bgColor =
-    type === "create"
-      ? "bg-lamaYellow"
-      : type === "update"
-        ? "bg-lamaSky"
-        : "bg-lamaPurple";
-
-  const [open, setOpen] = useState(false);
-
-  const UnsupportedForm = ({
-    label,
-  }: {
-    label: string;
-  }) => (
+  onClose,
+}: {
+  label: string;
+  table: FormContainerProps["table"];
+  type: FormContainerProps["type"];
+  onClose: () => void;
+}) {
+  return (
     <div className="p-4 flex flex-col items-center justify-center gap-4 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-2xl">
         ⚠️
@@ -166,63 +160,119 @@ const FormModal = ({
         </p>
       </div>
       <button
+        type="button"
         className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white"
-        onClick={() => setOpen(false)}
+        onClick={onClose}
       >
         Close
       </button>
     </div>
   );
+}
 
-  const Form = () => {
-    const deleteAction = deleteActionMap[table as keyof typeof deleteActionMap];
-    const [state, formAction] = useActionState(deleteAction ?? (() => ({ success: false, error: true })), {
-      success: false,
-      error: false,
-    });
+function ModalContent({
+  table,
+  type,
+  data,
+  id,
+  relatedData,
+  setOpen,
+}: FormContainerProps & {
+  relatedData?: unknown;
+  setOpen: Dispatch<SetStateAction<boolean>>;
+}) {
+  const deleteAction = deleteActionMap[table];
+  const [state, formAction] = useActionState(
+    deleteAction ?? unsupportedDeleteAction,
+    { success: false, error: false }
+  );
+  const router = useRouter();
 
-    const router = useRouter();
+  useEffect(() => {
+    if (state.success) {
+      toast(`${table} has been deleted!`);
+      setOpen(false);
+      router.refresh();
+    }
+  }, [state.success, router, setOpen, table]);
 
-    useEffect(() => {
-      if (state.success) {
-        toast(`${table} has been deleted!`);
-        setOpen(false);
-        router.refresh();
-      }
-    }, [state, router]);
-
-    if (type === "delete") {
-      if (!id) {
-        return <UnsupportedForm label="Missing record" />;
-      }
-
-      if (!deleteAction) {
-        return <UnsupportedForm label="Delete form unavailable" />;
-      }
-
+  if (type === "delete") {
+    if (id === undefined) {
       return (
-        <form action={formAction} className="p-4 flex flex-col gap-4">
-          <input type="text | number" name="id" value={id} hidden />
-          <span className="text-center font-medium">
-            All data will be lost. Are you sure you want to delete this {table}?
-          </span>
-          <button className="bg-red-700 text-white py-2 px-4 rounded-md border-none w-max self-center">
-            Delete
-          </button>
-        </form>
+        <UnsupportedForm
+          label="Missing record"
+          table={table}
+          type={type}
+          onClose={() => setOpen(false)}
+        />
       );
     }
 
-    if (!forms[table]) {
-      return <UnsupportedForm label="Form unavailable" />;
+    if (!deleteAction) {
+      return (
+        <UnsupportedForm
+          label="Delete form unavailable"
+          table={table}
+          type={type}
+          onClose={() => setOpen(false)}
+        />
+      );
     }
 
-    return forms[table](setOpen, type, data, relatedData);
-  };
+    return (
+      <form action={formAction} className="p-4 flex flex-col gap-4">
+        <input type="hidden" name="id" value={id} />
+        <span className="text-center font-medium">
+          All data will be lost. Are you sure you want to delete this {table}?
+        </span>
+        {state.error && (
+          <span className="text-center text-sm text-red-500">
+            The record could not be deleted.
+          </span>
+        )}
+        <button className="bg-red-700 text-white py-2 px-4 rounded-md border-none w-max self-center">
+          Delete
+        </button>
+      </form>
+    );
+  }
+
+  const form = forms[table];
+  if (!form) {
+    return (
+      <UnsupportedForm
+        label="Form unavailable"
+        table={table}
+        type={type}
+        onClose={() => setOpen(false)}
+      />
+    );
+  }
+
+  return form(setOpen, type, data, relatedData);
+}
+
+const FormModal = ({
+  table,
+  type,
+  data,
+  id,
+  relatedData,
+}: FormContainerProps & { relatedData?: unknown }) => {
+  const size = type === "create" ? "w-8 h-8" : "w-7 h-7";
+  const bgColor =
+    type === "create"
+      ? "bg-lamaYellow"
+      : type === "update"
+        ? "bg-lamaSky"
+        : "bg-lamaPurple";
+  const [open, setOpen] = useState(false);
 
   return (
     <>
       <button
+        type="button"
+        aria-label={`${type} ${table}`}
         className={`${size} flex items-center justify-center rounded-full ${bgColor}`}
         onClick={() => setOpen(true)}
       >
@@ -231,13 +281,22 @@ const FormModal = ({
       {open && (
         <div className="w-screen h-screen absolute left-0 top-0 bg-black bg-opacity-60 z-50 flex items-center justify-center">
           <div className="bg-white p-4 rounded-md relative w-[90%] md:w-[70%] lg:w-[60%] xl:w-[50%] 2xl:w-[40%]">
-            <Form />
-            <div
+            <ModalContent
+              table={table}
+              type={type}
+              data={data}
+              id={id}
+              relatedData={relatedData}
+              setOpen={setOpen}
+            />
+            <button
+              type="button"
+              aria-label="Close form"
               className="absolute top-4 right-4 cursor-pointer"
               onClick={() => setOpen(false)}
             >
               <Image src="/close.png" alt="" width={14} height={14} />
-            </div>
+            </button>
           </div>
         </div>
       )}

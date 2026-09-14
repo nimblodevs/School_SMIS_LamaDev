@@ -2,14 +2,17 @@ import Menu from "@/components/Menu";
 import Navbar from "@/components/Navbar";
 import Image from "next/image";
 import Link from "next/link";
+import { requirePageUser } from "@/lib/authorization";
 
 export const dynamic = "force-dynamic";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await requirePageUser();
+
   return (
     <div className="h-screen flex overflow-hidden">
       {/* LEFT */}

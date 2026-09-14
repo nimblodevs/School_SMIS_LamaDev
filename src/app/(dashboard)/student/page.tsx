@@ -2,18 +2,17 @@ import Announcements from "@/components/Announcements";
 import BigCalendarContainer from "@/components/BigCalendarContainer";
 import EventCalendar from "@/components/EventCalendar";
 import prisma from "@/lib/prisma";
-import { auth } from "@/auth";
+import { requirePageUser } from "@/lib/authorization";
 
 const StudentPage = async () => {
-  const session = await auth();
-  const userId = session?.user?.id;
-const classItem = await prisma.class.findMany({
+  const user = await requirePageUser(["student"]);
+  const userId = user.id;
+  const classItem = await prisma.class.findMany({
     where: {
       students: { some: { id: userId! } },
     },
   });
 
-  console.log(classItem);
   return (
     <div className="p-4 flex gap-4 flex-col xl:flex-row">
       {/* LEFT */}

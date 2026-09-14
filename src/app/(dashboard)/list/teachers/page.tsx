@@ -7,7 +7,7 @@ import { Class, Prisma, Subject, Teacher } from "@prisma/client";
 import Image from "next/image";
 import Link from "next/link";
 import { ITEM_PER_PAGE } from "@/lib/settings";
-import { auth } from "@/auth";
+import { requirePageUser } from "@/lib/authorization";
 
 type TeacherList = Teacher & { subjects: Subject[] } & { classes: Class[] };
 
@@ -17,8 +17,8 @@ const TeacherListPage = async ({
   searchParams: Promise<{ [key: string]: string | undefined }>;
 }) => {
   const params = await searchParams;
-  const session = await auth();
-  const role = session?.user?.role;
+  const user = await requirePageUser(["admin", "teacher"]);
+  const role = user.role;
   const columns = [
     {
       header: "Info",
@@ -93,7 +93,7 @@ const TeacherListPage = async ({
               <Image src="/view.png" alt="" width={16} height={16} />
             </button>
           </Link>
-          {(role === "admin" || (role === "teacher" && session?.user?.id === item.id)) && (
+          {(role === "admin" || (role === "teacher" && user.id === item.id)) && (
             <FormContainer table="teacher" type="update" data={item} />
           )}
           {role === "admin" && (

@@ -14,18 +14,28 @@ import { parentSchema, ParentSchema } from "@/lib/formValidationSchemas";
 import { createParent, updateParent } from "@/lib/actions";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
+import type { Parent, Student } from "@prisma/client";
+
+type ParentFormData = Parent & {
+  students?: Pick<Student, "id" | "name" | "surname">[];
+};
+type ParentRelatedData = {
+  students: Pick<Student, "id" | "name" | "surname">[];
+};
 
 const ParentForm = ({
   type,
-  data,
+  data: rawData,
   setOpen,
-  relatedData,
+  relatedData: rawRelatedData,
 }: {
   type: "create" | "update";
-  data?: any;
+  data?: unknown;
   setOpen: Dispatch<SetStateAction<boolean>>;
-  relatedData?: any;
+  relatedData?: unknown;
 }) => {
+  const data = rawData as ParentFormData | undefined;
+  const relatedData = (rawRelatedData ?? { students: [] }) as ParentRelatedData;
   const {
     register,
     handleSubmit,
@@ -76,7 +86,7 @@ const ParentForm = ({
         <InputField
           label="Email"
           name="email"
-          defaultValue={data?.email}
+          defaultValue={data?.email ?? undefined}
           register={register}
           error={errors?.email}
         />
@@ -84,9 +94,9 @@ const ParentForm = ({
           label="Password"
           name="password"
           type="password"
-          defaultValue={data?.password}
           register={register}
           error={errors?.password}
+          inputProps={{ required: type === "create" }}
         />
         <InputField
           label="First Name"

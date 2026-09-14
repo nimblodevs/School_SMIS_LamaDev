@@ -9,7 +9,7 @@ import { Class, Prisma, Student } from "@prisma/client";
 import Image from "next/image";
 import Link from "next/link";
 
-import { auth } from "@/auth";
+import { requirePageUser } from "@/lib/authorization";
 
 type StudentList = Student & { class: Class };
 
@@ -19,8 +19,8 @@ const StudentListPage = async ({
   searchParams: Promise<{ [key: string]: string | undefined }>;
 }) => {
   const params = await searchParams;
-  const session = await auth();
-  const role = session?.user?.role;
+  const user = await requirePageUser(["admin", "teacher"]);
+  const role = user.role;
 
   const columns = [
     {
@@ -126,6 +126,12 @@ const StudentListPage = async ({
         }
       }
     }
+  }
+
+  if (role === "teacher") {
+    query.AND = [
+      { class: { lessons: { some: { teacherId: user.id } } } },
+    ];
   }
 
   const [data, count] = await prisma.$transaction([
