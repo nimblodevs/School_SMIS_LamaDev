@@ -26,7 +26,7 @@ Role-based dashboards and list views:
 - Schedules (calendar)
 - Admin charts (counts, attendance, finance)
 
-Sign in at `/sign-in`. Create an account at `/sign-up`. Unauthenticated users are redirected away from `/admin`, `/teacher`, `/student`, and `/parent`.
+Sign in at `/sign-in`. Accounts are provisioned by administrators; public registration is disabled. Unauthenticated users are redirected away from every dashboard and list route.
 
 ## Requirements
 
@@ -49,6 +49,9 @@ DIRECT_URL="postgresql://USER:PASSWORD@HOST:5432/postgres"
 NEXTAUTH_SECRET="generate-a-long-random-string"
 NEXTAUTH_URL="http://localhost:3000"
 
+# Required only for seeding local demo accounts
+SEED_USER_PASSWORD=""
+
 # Optional, for Cloudinary uploads in teacher/student forms
 NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=""
 ```
@@ -56,12 +59,13 @@ NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=""
 - `DATABASE_URL` is the app connection (transaction pooler is fine).
 - `DIRECT_URL` is used by Prisma migrations (session mode / direct connection).
 - `NEXTAUTH_SECRET` can be generated with `openssl rand -base64 32`.
+- Set `SEED_USER_PASSWORD` to a unique value of at least 12 characters before running the seed command.
 
 Then:
 
 ```bash
 npx prisma generate
-npx prisma db push
+npx prisma migrate dev
 npx prisma db seed
 npm run dev
 ```
@@ -113,10 +117,10 @@ This repo is aligned with the Next.js 16 upgrade path:
 ## Auth notes
 
 - Sessions use the credentials provider and JWT strategy.
-- Sign-up writes a `User` row (bcrypt password).
-- Seeded `Admin` / `Teacher` / `Student` / `Parent` usernames can still sign in through the fallback path in `src/auth.ts`.
-
-Change those fallback passwords before using this with real school data.
+- Public sign-up is disabled.
+- Administrators create teacher, student, and parent profiles together with their login accounts.
+- Seeded accounts use the password supplied through `SEED_USER_PASSWORD`; no fallback passwords are accepted.
+- The integrity migration preserves invalid or duplicate result/attendance rows in `_ResultIntegrityQuarantine` and `_AttendanceIntegrityQuarantine` for administrator review.
 
 ## Learn more
 

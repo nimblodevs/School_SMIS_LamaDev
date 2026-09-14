@@ -4,7 +4,7 @@ import FormContainer from "@/components/FormContainer";
 import Performance from "@/components/Performance";
 import StudentAttendanceCard from "@/components/StudentAttendanceCard";
 import prisma from "@/lib/prisma";
-import { auth } from "@/auth";
+import { requirePageUser } from "@/lib/authorization";
 import { Class, Student } from "@prisma/client";
 import Image from "next/image";
 import Link from "next/link";
@@ -17,15 +17,20 @@ const SingleStudentPage = async ({
   params: Promise<{ id: string }>;
 }) => {
   const { id } = await params;
-  const session = await auth();
-  const role = session?.user?.role;
+  const user = await requirePageUser(["admin", "teacher"]);
+  const role = user.role;
 
   const student:
     | (Student & {
         class: Class & { _count: { lessons: number } };
       })
-    | null = await prisma.student.findUnique({
-    where: { id },
+      | null = await prisma.student.findFirst({
+    where: {
+      id,
+      ...(role === "teacher"
+        ? { class: { lessons: { some: { teacherId: user.id } } } }
+        : {}),
+    },
     include: {
       class: { include: { _count: { select: { lessons: true } } } },
     },

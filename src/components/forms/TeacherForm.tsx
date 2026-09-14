@@ -17,18 +17,27 @@ import { createTeacher, updateTeacher } from "@/lib/actions";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { CldUploadWidget } from "next-cloudinary";
+import type { Subject, Teacher } from "@prisma/client";
+import { getSecureImageUrl } from "@/lib/cloudinary";
+
+type TeacherFormData = Teacher & { subjects?: Pick<Subject, "id">[] };
+type TeacherRelatedData = {
+  subjects: Pick<Subject, "id" | "name">[];
+};
 
 const TeacherForm = ({
   type,
-  data,
+  data: rawData,
   setOpen,
-  relatedData,
+  relatedData: rawRelatedData,
 }: {
   type: "create" | "update";
-  data?: any;
+  data?: unknown;
   setOpen: Dispatch<SetStateAction<boolean>>;
-  relatedData?: any;
+  relatedData?: unknown;
 }) => {
+  const data = rawData as TeacherFormData | undefined;
+  const relatedData = (rawRelatedData ?? { subjects: [] }) as TeacherRelatedData;
   const {
     register,
     handleSubmit,
@@ -37,7 +46,7 @@ const TeacherForm = ({
     resolver: zodResolver(teacherSchema),
   });
 
-  const [img, setImg] = useState<any>();
+  const [img, setImg] = useState<string>();
 
   const [state, formAction] = useActionState(
     type === "create" ? createTeacher : updateTeacher,
@@ -49,7 +58,7 @@ const TeacherForm = ({
 
   const onSubmit = handleSubmit((data) => {
     startTransition(() => {
-      formAction({ ...data, img: img?.secure_url });
+      formAction({ ...data, img: img ?? data?.img ?? undefined });
     });
   });
 
@@ -84,7 +93,7 @@ const TeacherForm = ({
         <InputField
           label="Email"
           name="email"
-          defaultValue={data?.email}
+          defaultValue={data?.email ?? undefined}
           register={register}
           error={errors?.email}
         />
@@ -92,9 +101,9 @@ const TeacherForm = ({
           label="Password"
           name="password"
           type="password"
-          defaultValue={data?.password}
           register={register}
           error={errors?.password}
+          inputProps={{ required: type === "create" }}
         />
       </div>
       <span className="text-xs text-gray-400 font-medium">
@@ -118,7 +127,7 @@ const TeacherForm = ({
         <InputField
           label="Phone"
           name="phone"
-          defaultValue={data?.phone}
+          defaultValue={data?.phone ?? undefined}
           register={register}
           error={errors.phone}
         />
@@ -176,7 +185,7 @@ const TeacherForm = ({
             multiple
             className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full"
             {...register("subjects")}
-            defaultValue={data?.subjects}
+            defaultValue={data?.subjects?.map((subject) => String(subject.id))}
           >
             {subjects.map((subject: { id: number; name: string }) => (
               <option value={subject.id} key={subject.id}>
@@ -193,7 +202,7 @@ const TeacherForm = ({
         <CldUploadWidget
           uploadPreset="school"
           onSuccess={(result, { widget }) => {
-            setImg(result.info);
+            setImg(getSecureImageUrl(result.info));
             widget.close();
           }}
         >

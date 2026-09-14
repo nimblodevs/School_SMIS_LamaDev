@@ -1,582 +1,722 @@
 "use server";
 
+import "server-only";
+
+import bcrypt from "bcryptjs";
+import { Prisma, UserRole as DatabaseUserRole } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { requireActionUser } from "./authorization";
 import {
-  ClassSchema,
-  ExamSchema,
-  LessonSchema,
-  ParentSchema,
-  StudentSchema,
-  SubjectSchema,
-  TeacherSchema,
+  classSchema,
+  examSchema,
+  lessonSchema,
+  parentSchema,
+  studentSchema,
+  subjectSchema,
+  teacherSchema,
+  type ClassSchema,
+  type ExamSchema,
+  type LessonSchema,
+  type ParentSchema,
+  type StudentSchema,
+  type SubjectSchema,
+  type TeacherSchema,
 } from "./formValidationSchemas";
 import prisma from "./prisma";
+import type { UserRole } from "./routeAccess";
 
 type CurrentState = { success: boolean; error: boolean };
+type SessionUser = { id: string; role: UserRole };
+
+const successState: CurrentState = { success: true, error: false };
+const errorState: CurrentState = { success: false, error: true };
+const adminOnly = ["admin"] as const;
+const adminOrTeacher = ["admin", "teacher"] as const;
+const integerIdSchema = z.coerce.number().int().positive();
+const stringIdSchema = z.string().trim().min(1);
+
+async function runMutation<Schema extends z.ZodTypeAny>(
+  label: string,
+  allowedRoles: readonly UserRole[],
+  schema: Schema,
+  input: unknown,
+  path: string,
+  operation: (data: z.infer<Schema>, user: SessionUser) => Promise<void>
+): Promise<CurrentState> {
+  try {
+    const user = await requireActionUser(allowedRoles);
+    const parsed = schema.safeParse(input);
+
+    if (!parsed.success) {
+      return errorState;
+    }
+
+    await operation(parsed.data, user);
+    revalidatePath(path);
+    return successState;
+  } catch (error) {
+    console.error(
+      `${label} failed:`,
+      error instanceof Error ? error.message : "Unknown error"
+    );
+    return errorState;
+  }
+}
+
+function idFromFormData(data: FormData): FormDataEntryValue | null {
+  return data.get("id");
+}
+
+function requireId<T>(id: T | undefined): T {
+  if (id === undefined) {
+    throw new Error("A record id is required");
+  }
+
+  return id;
+}
+
+type AccountInput = {
+  id: string;
+  username: string;
+  name: string;
+  email?: string | null;
+  passwordHash?: string;
+  role: DatabaseUserRole;
+};
+
+async function syncUserAccount(
+  tx: Prisma.TransactionClient,
+  account: AccountInput
+): Promise<void> {
+  const existingUser = await tx.user.findUnique({ where: { id: account.id } });
+  const password = account.passwordHash;
+
+  if (!existingUser && !password) {
+    throw new Error("A password is required when creating an account");
+  }
+
+  if (existingUser) {
+    await tx.user.update({
+      where: { id: account.id },
+      data: {
+        username: account.username,
+        name: account.name,
+        email: account.email || null,
+        role: account.role,
+        ...(password ? { password } : {}),
+      },
+    });
+    return;
+  }
+
+  await tx.user.create({
+    data: {
+      id: account.id,
+      username: account.username,
+      name: account.name,
+      email: account.email || null,
+      role: account.role,
+      password: password!,
+    },
+  });
+}
 
 export const createSubject = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: SubjectSchema
-) => {
-  try {
+) =>
+  runMutation("Create subject", adminOnly, subjectSchema, data, "/list/subjects", async (values) => {
     await prisma.subject.create({
       data: {
-        name: data.name,
+        name: values.name,
         teachers: {
-          connect: data.teachers.map((teacherId) => ({ id: teacherId })),
+          connect: values.teachers.map((teacherId) => ({ id: teacherId })),
         },
       },
     });
-
-    // revalidatePath("/list/subjects");
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+  });
 
 export const updateSubject = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: SubjectSchema
-) => {
-  try {
+) =>
+  runMutation("Update subject", adminOnly, subjectSchema, data, "/list/subjects", async (values) => {
     await prisma.subject.update({
-      where: {
-        id: data.id,
-      },
+      where: { id: requireId(values.id) },
       data: {
-        name: data.name,
+        name: values.name,
         teachers: {
-          set: data.teachers.map((teacherId) => ({ id: teacherId })),
+          set: values.teachers.map((teacherId) => ({ id: teacherId })),
         },
       },
     });
-
-    // revalidatePath("/list/subjects");
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+  });
 
 export const deleteSubject = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: FormData
-) => {
-  const id = data.get("id") as string;
-  try {
-    await prisma.subject.delete({
-      where: {
-        id: parseInt(id),
-      },
-    });
-
-    // revalidatePath("/list/subjects");
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+) =>
+  runMutation(
+    "Delete subject",
+    adminOnly,
+    integerIdSchema,
+    idFromFormData(data),
+    "/list/subjects",
+    async (id) => {
+      await prisma.subject.delete({ where: { id } });
+    }
+  );
 
 export const createClass = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: ClassSchema
-) => {
-  try {
+) =>
+  runMutation("Create class", adminOnly, classSchema, data, "/list/classes", async (values) => {
     await prisma.class.create({
-      data,
+      data: {
+        name: values.name,
+        capacity: values.capacity,
+        gradeId: values.gradeId,
+        supervisorId: values.supervisorId,
+      },
     });
-
-    // revalidatePath("/list/class");
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+  });
 
 export const updateClass = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: ClassSchema
-) => {
-  try {
+) =>
+  runMutation("Update class", adminOnly, classSchema, data, "/list/classes", async (values) => {
+    const id = requireId(values.id);
     await prisma.class.update({
-      where: {
-        id: data.id,
+      where: { id },
+      data: {
+        name: values.name,
+        capacity: values.capacity,
+        gradeId: values.gradeId,
+        supervisorId: values.supervisorId,
       },
-      data,
     });
-
-    // revalidatePath("/list/class");
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+  });
 
 export const deleteClass = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: FormData
-) => {
-  const id = data.get("id") as string;
-  try {
-    await prisma.class.delete({
-      where: {
-        id: parseInt(id),
-      },
-    });
-
-    // revalidatePath("/list/class");
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+) =>
+  runMutation(
+    "Delete class",
+    adminOnly,
+    integerIdSchema,
+    idFromFormData(data),
+    "/list/classes",
+    async (id) => {
+      await prisma.class.delete({ where: { id } });
+    }
+  );
 
 export const createTeacher = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: TeacherSchema
-) => {
-  try {
-    await prisma.teacher.create({
-      data: {
-        id: data.username,
-        username: data.username,
-        name: data.name,
-        surname: data.surname,
-        email: data.email || null,
-        phone: data.phone || null,
-        address: data.address,
-        img: data.img || null,
-        bloodType: data.bloodType,
-        sex: data.sex,
-        birthday: data.birthday,
-        subjects: {
-          connect: data.subjects?.map((subjectId: string) => ({
-            id: parseInt(subjectId),
-          })),
-        },
-      },
-    });
+) =>
+  runMutation("Create teacher", adminOnly, teacherSchema, data, "/list/teachers", async (values) => {
+    if (!values.password) {
+      throw new Error("A password is required for a new teacher");
+    }
 
-    // revalidatePath("/list/teachers");
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+    const passwordHash = await bcrypt.hash(values.password, 12);
+    await prisma.$transaction(async (tx) => {
+      await tx.teacher.create({
+        data: {
+          id: values.username,
+          username: values.username,
+          name: values.name,
+          surname: values.surname,
+          email: values.email || null,
+          phone: values.phone || null,
+          address: values.address,
+          img: values.img || null,
+          bloodType: values.bloodType,
+          sex: values.sex,
+          birthday: values.birthday,
+          subjects: {
+            connect: values.subjects?.map((subjectId) => ({
+              id: Number(subjectId),
+            })),
+          },
+        },
+      });
+      await syncUserAccount(tx, {
+        id: values.username,
+        username: values.username,
+        name: `${values.name} ${values.surname}`,
+        email: values.email,
+        passwordHash,
+        role: DatabaseUserRole.TEACHER,
+      });
+    });
+  });
 
 export const updateTeacher = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: TeacherSchema
-) => {
-  if (!data.id) {
-    return { success: false, error: true };
-  }
-  try {
-    await prisma.teacher.update({
-      where: {
-        id: data.id,
-      },
-      data: {
-        username: data.username,
-        name: data.name,
-        surname: data.surname,
-        email: data.email || null,
-        phone: data.phone || null,
-        address: data.address,
-        img: data.img || null,
-        bloodType: data.bloodType,
-        sex: data.sex,
-        birthday: data.birthday,
-        subjects: {
-          set: data.subjects?.map((subjectId: string) => ({
-            id: parseInt(subjectId),
-          })),
-        },
-      },
-    });
-    // revalidatePath("/list/teachers");
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+) =>
+  runMutation(
+    "Update teacher",
+    adminOrTeacher,
+    teacherSchema,
+    data,
+    "/list/teachers",
+    async (values, user) => {
+      const id = requireId(values.id);
+      if (user.role === "teacher" && user.id !== id) {
+        throw new Error("Teachers may only update their own profile");
+      }
+
+      const passwordHash = values.password
+        ? await bcrypt.hash(values.password, 12)
+        : undefined;
+      await prisma.$transaction(async (tx) => {
+        await tx.teacher.update({
+          where: { id },
+          data: {
+            username: values.username,
+            name: values.name,
+            surname: values.surname,
+            email: values.email || null,
+            phone: values.phone || null,
+            address: values.address,
+            ...(values.img !== undefined ? { img: values.img || null } : {}),
+            bloodType: values.bloodType,
+            sex: values.sex,
+            birthday: values.birthday,
+            subjects: {
+              set: values.subjects?.map((subjectId) => ({
+                id: Number(subjectId),
+              })),
+            },
+          },
+        });
+        await syncUserAccount(tx, {
+          id,
+          username: values.username,
+          name: `${values.name} ${values.surname}`,
+          email: values.email,
+          passwordHash,
+          role: DatabaseUserRole.TEACHER,
+        });
+      });
+    }
+  );
 
 export const deleteTeacher = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: FormData
-) => {
-  const id = data.get("id") as string;
-  try {
-    await prisma.teacher.delete({
-      where: {
-        id: id,
-      },
-    });
-
-    // revalidatePath("/list/teachers");
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+) =>
+  runMutation(
+    "Delete teacher",
+    adminOnly,
+    stringIdSchema,
+    idFromFormData(data),
+    "/list/teachers",
+    async (id) => {
+      await prisma.$transaction([
+        prisma.user.deleteMany({ where: { id } }),
+        prisma.teacher.delete({ where: { id } }),
+      ]);
+    }
+  );
 
 export const createParent = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: ParentSchema
-) => {
-  try {
-    const parent = await prisma.parent.create({
-      data: {
-        id: data.username,
-        username: data.username,
-        name: data.name,
-        surname: data.surname,
-        email: data.email || null,
-        phone: data.phone,
-        address: data.address,
-      },
-    });
-
-    if (data.studentId) {
-      await prisma.student.update({
-        where: { id: data.studentId },
-        data: { parentId: parent.id },
-      });
+) =>
+  runMutation("Create parent", adminOnly, parentSchema, data, "/list/parents", async (values) => {
+    if (!values.password) {
+      throw new Error("A password is required for a new parent");
     }
 
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+    const passwordHash = await bcrypt.hash(values.password, 12);
+    await prisma.$transaction(async (tx) => {
+      const parent = await tx.parent.create({
+        data: {
+          id: values.username,
+          username: values.username,
+          name: values.name,
+          surname: values.surname,
+          email: values.email || null,
+          phone: values.phone,
+          address: values.address,
+        },
+      });
+
+      if (values.studentId) {
+        await tx.student.update({
+          where: { id: values.studentId },
+          data: { parentId: parent.id },
+        });
+      }
+
+      await syncUserAccount(tx, {
+        id: parent.id,
+        username: values.username,
+        name: `${values.name} ${values.surname}`,
+        email: values.email,
+        passwordHash,
+        role: DatabaseUserRole.PARENT,
+      });
+    });
+  });
 
 export const updateParent = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: ParentSchema
-) => {
-  if (!data.id) {
-    return { success: false, error: true };
-  }
-
-  try {
-    await prisma.parent.update({
-      where: {
-        id: data.id,
-      },
-      data: {
-        username: data.username,
-        name: data.name,
-        surname: data.surname,
-        email: data.email || null,
-        phone: data.phone,
-        address: data.address,
-      },
-    });
-
-    if (data.studentId) {
-      await prisma.student.update({
-        where: { id: data.studentId },
-        data: { parentId: data.id },
+) =>
+  runMutation("Update parent", adminOnly, parentSchema, data, "/list/parents", async (values) => {
+    const id = requireId(values.id);
+    const passwordHash = values.password
+      ? await bcrypt.hash(values.password, 12)
+      : undefined;
+    await prisma.$transaction(async (tx) => {
+      await tx.parent.update({
+        where: { id },
+        data: {
+          username: values.username,
+          name: values.name,
+          surname: values.surname,
+          email: values.email || null,
+          phone: values.phone,
+          address: values.address,
+        },
       });
-    }
 
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+      if (values.studentId) {
+        await tx.student.update({
+          where: { id: values.studentId },
+          data: { parentId: id },
+        });
+      }
+
+      await syncUserAccount(tx, {
+        id,
+        username: values.username,
+        name: `${values.name} ${values.surname}`,
+        email: values.email,
+        passwordHash,
+        role: DatabaseUserRole.PARENT,
+      });
+    });
+  });
 
 export const deleteParent = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: FormData
-) => {
-  const id = data.get("id") as string;
-
-  try {
-    await prisma.parent.delete({
-      where: {
-        id: id,
-      },
-    });
-
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+) =>
+  runMutation(
+    "Delete parent",
+    adminOnly,
+    stringIdSchema,
+    idFromFormData(data),
+    "/list/parents",
+    async (id) => {
+      await prisma.$transaction([
+        prisma.user.deleteMany({ where: { id } }),
+        prisma.parent.delete({ where: { id } }),
+      ]);
+    }
+  );
 
 export const createStudent = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: StudentSchema
-) => {
-  console.log(data);
-  try {
-    const classItem = await prisma.class.findUnique({
-      where: { id: data.classId },
-      include: { _count: { select: { students: true } } },
-    });
-
-    if (classItem && classItem.capacity === classItem._count.students) {
-      return { success: false, error: true };
+) =>
+  runMutation("Create student", adminOnly, studentSchema, data, "/list/students", async (values) => {
+    if (!values.password) {
+      throw new Error("A password is required for a new student");
     }
-    await prisma.student.create({
-      data: {
-        id: data.username,
-        username: data.username,
-        name: data.name,
-        surname: data.surname,
-        email: data.email || null,
-        phone: data.phone || null,
-        address: data.address,
-        img: data.img || null,
-        bloodType: data.bloodType,
-        sex: data.sex,
-        birthday: data.birthday,
-        gradeId: data.gradeId,
-        classId: data.classId,
-        parentId: data.parentId,
-      },
-    });
 
-    // revalidatePath("/list/students");
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+    const passwordHash = await bcrypt.hash(values.password, 12);
+    await prisma.$transaction(
+      async (tx) => {
+        const classItem = await tx.class.findUnique({
+          where: { id: values.classId },
+          include: { _count: { select: { students: true } } },
+        });
+
+        if (!classItem || classItem._count.students >= classItem.capacity) {
+          throw new Error("The selected class is full or unavailable");
+        }
+
+        await tx.student.create({
+          data: {
+            id: values.username,
+            username: values.username,
+            name: values.name,
+            surname: values.surname,
+            email: values.email || null,
+            phone: values.phone || null,
+            address: values.address,
+            ...(values.img !== undefined ? { img: values.img || null } : {}),
+            bloodType: values.bloodType,
+            sex: values.sex,
+            birthday: values.birthday,
+            gradeId: values.gradeId,
+            classId: values.classId,
+            parentId: values.parentId,
+          },
+        });
+        await syncUserAccount(tx, {
+          id: values.username,
+          username: values.username,
+          name: `${values.name} ${values.surname}`,
+          email: values.email,
+          passwordHash,
+          role: DatabaseUserRole.STUDENT,
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+  });
 
 export const updateStudent = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: StudentSchema
-) => {
-  if (!data.id) {
-    return { success: false, error: true };
-  }
-  try {
-    await prisma.student.update({
-      where: {
-        id: data.id,
+) =>
+  runMutation("Update student", adminOnly, studentSchema, data, "/list/students", async (values) => {
+    const id = requireId(values.id);
+    const passwordHash = values.password
+      ? await bcrypt.hash(values.password, 12)
+      : undefined;
+    await prisma.$transaction(
+      async (tx) => {
+        const [student, classItem] = await Promise.all([
+          tx.student.findUnique({ where: { id }, select: { classId: true } }),
+          tx.class.findUnique({
+            where: { id: values.classId },
+            include: { _count: { select: { students: true } } },
+          }),
+        ]);
+
+        if (!student || !classItem) {
+          throw new Error("Student or class not found");
+        }
+
+        if (
+          student.classId !== values.classId &&
+          classItem._count.students >= classItem.capacity
+        ) {
+          throw new Error("The selected class is full");
+        }
+
+        await tx.student.update({
+          where: { id },
+          data: {
+            username: values.username,
+            name: values.name,
+            surname: values.surname,
+            email: values.email || null,
+            phone: values.phone || null,
+            address: values.address,
+            ...(values.img !== undefined ? { img: values.img || null } : {}),
+            bloodType: values.bloodType,
+            sex: values.sex,
+            birthday: values.birthday,
+            gradeId: values.gradeId,
+            classId: values.classId,
+            parentId: values.parentId,
+          },
+        });
+        await syncUserAccount(tx, {
+          id,
+          username: values.username,
+          name: `${values.name} ${values.surname}`,
+          email: values.email,
+          passwordHash,
+          role: DatabaseUserRole.STUDENT,
+        });
       },
-      data: {
-        username: data.username,
-        name: data.name,
-        surname: data.surname,
-        email: data.email || null,
-        phone: data.phone || null,
-        address: data.address,
-        img: data.img || null,
-        bloodType: data.bloodType,
-        sex: data.sex,
-        birthday: data.birthday,
-        gradeId: data.gradeId,
-        classId: data.classId,
-        parentId: data.parentId,
-      },
-    });
-    // revalidatePath("/list/students");
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+    );
+  });
 
 export const deleteStudent = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: FormData
-) => {
-  const id = data.get("id") as string;
-  try {
-    await prisma.student.delete({
-      where: {
-        id: id,
-      },
-    });
-
-    // revalidatePath("/list/students");
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+) =>
+  runMutation(
+    "Delete student",
+    adminOnly,
+    stringIdSchema,
+    idFromFormData(data),
+    "/list/students",
+    async (id) => {
+      await prisma.$transaction([
+        prisma.user.deleteMany({ where: { id } }),
+        prisma.student.delete({ where: { id } }),
+      ]);
+    }
+  );
 
 export const createLesson = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: LessonSchema
-) => {
-  try {
+) =>
+  runMutation("Create lesson", adminOnly, lessonSchema, data, "/list/lessons", async (values) => {
     await prisma.lesson.create({
       data: {
-        name: data.name,
-        day: data.day,
-        startTime: data.startTime,
-        endTime: data.endTime,
-        subjectId: data.subjectId,
-        classId: data.classId,
-        teacherId: data.teacherId,
+        name: values.name,
+        day: values.day,
+        startTime: values.startTime,
+        endTime: values.endTime,
+        subjectId: values.subjectId,
+        classId: values.classId,
+        teacherId: values.teacherId,
       },
     });
-
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+  });
 
 export const updateLesson = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: LessonSchema
-) => {
-  try {
+) =>
+  runMutation("Update lesson", adminOnly, lessonSchema, data, "/list/lessons", async (values) => {
+    const id = requireId(values.id);
     await prisma.lesson.update({
-      where: {
-        id: data.id,
-      },
+      where: { id },
       data: {
-        name: data.name,
-        day: data.day,
-        startTime: data.startTime,
-        endTime: data.endTime,
-        subjectId: data.subjectId,
-        classId: data.classId,
-        teacherId: data.teacherId,
+        name: values.name,
+        day: values.day,
+        startTime: values.startTime,
+        endTime: values.endTime,
+        subjectId: values.subjectId,
+        classId: values.classId,
+        teacherId: values.teacherId,
       },
     });
-
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+  });
 
 export const deleteLesson = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: FormData
-) => {
-  const id = data.get("id") as string;
+) =>
+  runMutation(
+    "Delete lesson",
+    adminOnly,
+    integerIdSchema,
+    idFromFormData(data),
+    "/list/lessons",
+    async (id) => {
+      await prisma.lesson.delete({ where: { id } });
+    }
+  );
 
-  try {
-    await prisma.lesson.delete({
-      where: {
-        id: parseInt(id),
-      },
-    });
+async function assertTeacherOwnsLesson(
+  user: SessionUser,
+  lessonId: number
+): Promise<void> {
+  if (user.role !== "teacher") return;
 
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+  const lesson = await prisma.lesson.findFirst({
+    where: { id: lessonId, teacherId: user.id },
+    select: { id: true },
+  });
+  if (!lesson) throw new Error("Teachers may only manage exams for their lessons");
+}
 
 export const createExam = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: ExamSchema
-) => {
-  try {
-    // if (role === "teacher") {
-    //   const teacherLesson = await prisma.lesson.findFirst({
-    //     where: {
-    //       teacherId: userId!,
-    //       id: data.lessonId,
-    //     },
-    //   });
-
-    //   if (!teacherLesson) {
-    //     return { success: false, error: true };
-    //   }
-    // }
-
+) =>
+  runMutation("Create exam", adminOrTeacher, examSchema, data, "/list/exams", async (values, user) => {
+    await assertTeacherOwnsLesson(user, values.lessonId);
     await prisma.exam.create({
       data: {
-        title: data.title,
-        startTime: data.startTime,
-        endTime: data.endTime,
-        lessonId: data.lessonId,
+        title: values.title,
+        startTime: values.startTime,
+        endTime: values.endTime,
+        lessonId: values.lessonId,
       },
     });
-
-    // revalidatePath("/list/subjects");
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+  });
 
 export const updateExam = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: ExamSchema
-) => {
-  try {
-    // if (role === "teacher") {
-    //   const teacherLesson = await prisma.lesson.findFirst({
-    //     where: {
-    //       teacherId: userId!,
-    //       id: data.lessonId,
-    //     },
-    //   });
+) =>
+  runMutation("Update exam", adminOrTeacher, examSchema, data, "/list/exams", async (values, user) => {
+    const id = requireId(values.id);
+    await assertTeacherOwnsLesson(user, values.lessonId);
 
-    //   if (!teacherLesson) {
-    //     return { success: false, error: true };
-    //   }
-    // }
+    if (user.role === "teacher") {
+      const existing = await prisma.exam.findFirst({
+        where: { id, lesson: { teacherId: user.id } },
+        select: { id: true },
+      });
+      if (!existing) throw new Error("Teachers may only update their own exams");
+    }
 
     await prisma.exam.update({
-      where: {
-        id: data.id,
-      },
+      where: { id },
       data: {
-        title: data.title,
-        startTime: data.startTime,
-        endTime: data.endTime,
-        lessonId: data.lessonId,
+        title: values.title,
+        startTime: values.startTime,
+        endTime: values.endTime,
+        lessonId: values.lessonId,
       },
     });
-
-    // revalidatePath("/list/subjects");
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+  });
 
 export const deleteExam = async (
-  currentState: CurrentState,
+  _currentState: CurrentState,
   data: FormData
-) => {
-  const id = data.get("id") as string;
+) =>
+  runMutation(
+    "Delete exam",
+    adminOrTeacher,
+    integerIdSchema,
+    idFromFormData(data),
+    "/list/exams",
+    async (id, user) => {
+      if (user.role === "admin") {
+        await prisma.exam.delete({ where: { id } });
+        return;
+      }
 
-  try {
-    await prisma.exam.delete({
-      where: {
-        id: parseInt(id),
-        // ...(role === "teacher" ? { lesson: { teacherId: userId! } } : {}),
-      },
-    });
+      const result = await prisma.exam.deleteMany({
+        where: { id, lesson: { teacherId: user.id } },
+      });
+      if (result.count !== 1) {
+        throw new Error("Teachers may only delete their own exams");
+      }
+    }
+  );
 
-    // revalidatePath("/list/subjects");
-    return { success: true, error: false };
-  } catch (err) {
-    console.log(err);
-    return { success: false, error: true };
-  }
-};
+export const deleteEvent = async (
+  _currentState: CurrentState,
+  data: FormData
+) =>
+  runMutation(
+    "Delete event",
+    adminOnly,
+    integerIdSchema,
+    idFromFormData(data),
+    "/list/events",
+    async (id) => {
+      await prisma.event.delete({ where: { id } });
+    }
+  );
+
+export const deleteAnnouncement = async (
+  _currentState: CurrentState,
+  data: FormData
+) =>
+  runMutation(
+    "Delete announcement",
+    adminOnly,
+    integerIdSchema,
+    idFromFormData(data),
+    "/list/announcements",
+    async (id) => {
+      await prisma.announcement.delete({ where: { id } });
+    }
+  );

@@ -3,9 +3,10 @@
 import { Calendar, momentLocalizer, View, Views } from "react-big-calendar";
 import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 
 const localizer = momentLocalizer(moment);
+const subscribe = () => () => {};
 
 type CalendarEvent = { title: string; start: Date; end: Date };
 
@@ -24,11 +25,7 @@ const LessonEvent = ({ event }: { event: CalendarEvent }) => {
 
 const BigCalendar = ({ data }: { data: CalendarEvent[] }) => {
   const [view, setView] = useState<View>(Views.WORK_WEEK);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(subscribe, () => true, () => false);
 
   const calendarDate = useMemo(() => {
     if (!data.length) return new Date();

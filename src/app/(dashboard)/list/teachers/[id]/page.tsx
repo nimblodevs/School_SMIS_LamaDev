@@ -3,7 +3,7 @@ import BigCalendarContainer from "@/components/BigCalendarContainer";
 import FormContainer from "@/components/FormContainer";
 import Performance from "@/components/Performance";
 import prisma from "@/lib/prisma";
-import { auth } from "@/auth";
+import { requirePageUser } from "@/lib/authorization";
 import { Teacher } from "@prisma/client";
 import Image from "next/image";
 import Link from "next/link";
@@ -15,9 +15,9 @@ const SingleTeacherPage = async ({
   params: Promise<{ id: string }>;
 }) => {
   const { id } = await params;
-  const session = await auth();
-  const role = session?.user?.role;
-  const currentUserId = session?.user?.id;
+  const user = await requirePageUser(["admin", "teacher"]);
+  const role = user.role;
+  const currentUserId = user.id;
   const canEditTeacher =
     role === "admin" || (role === "teacher" && currentUserId === id);
 

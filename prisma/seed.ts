@@ -1,7 +1,14 @@
-import { Day, PrismaClient, UserSex } from "@prisma/client";
+import { Day, PrismaClient, UserRole, UserSex } from "@prisma/client";
+import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
+  const seedPassword = process.env.SEED_USER_PASSWORD;
+  if (!seedPassword || seedPassword.length < 12) {
+    throw new Error("SEED_USER_PASSWORD must contain at least 12 characters");
+  }
+  const password = await bcrypt.hash(seedPassword, 12);
+
   // ADMIN
   await prisma.admin.create({
     data: {
@@ -200,6 +207,50 @@ async function main() {
       },
     });
   }
+
+  const users = [
+    ...Array.from({ length: 2 }, (_, index) => {
+      const id = `admin${index + 1}`;
+      return { id, username: id, name: id, role: UserRole.ADMIN };
+    }),
+    ...Array.from({ length: 15 }, (_, index) => {
+      const number = index + 1;
+      const id = `teacher${number}`;
+      return {
+        id,
+        username: id,
+        name: `TName${number} TSurname${number}`,
+        email: `${id}@example.com`,
+        role: UserRole.TEACHER,
+      };
+    }),
+    ...Array.from({ length: 25 }, (_, index) => {
+      const number = index + 1;
+      const id = `parentId${number}`;
+      return {
+        id,
+        username: id,
+        name: `PName ${number} PSurname ${number}`,
+        email: `parent${number}@example.com`,
+        role: UserRole.PARENT,
+      };
+    }),
+    ...Array.from({ length: 50 }, (_, index) => {
+      const number = index + 1;
+      const id = `student${number}`;
+      return {
+        id,
+        username: id,
+        name: `SName${number} SSurname ${number}`,
+        email: `${id}@example.com`,
+        role: UserRole.STUDENT,
+      };
+    }),
+  ];
+
+  await prisma.user.createMany({
+    data: users.map((user) => ({ ...user, password })),
+  });
 
   console.log("Seeding completed successfully.");
 }

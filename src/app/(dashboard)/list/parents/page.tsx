@@ -7,7 +7,7 @@ import { ITEM_PER_PAGE } from "@/lib/settings";
 import { Parent, Prisma, Student } from "@prisma/client";
 import Image from "next/image";
 
-import { auth } from "@/auth";
+import { requirePageUser } from "@/lib/authorization";
 
 type ParentList = Parent & { students: Student[] };
 
@@ -89,8 +89,8 @@ const ParentListPage = async ({
   searchParams: Promise<{ [key: string]: string | undefined }>;
 }) => {
   const params = await searchParams;
-  const session = await auth();
-  const role = session?.user?.role;
+  const user = await requirePageUser(["admin", "teacher"]);
+  const role = user.role;
 
 
   const columns = [
@@ -160,6 +160,12 @@ const ParentListPage = async ({
 
   const query: Prisma.ParentWhereInput = {};
 
+  if (role === "teacher") {
+    query.students = {
+      some: { class: { lessons: { some: { teacherId: user.id } } } },
+    };
+  }
+
   if (queryParams) {
     for (const [key, value] of Object.entries(queryParams)) {
       if (value !== undefined) {
@@ -182,7 +188,16 @@ const ParentListPage = async ({
       prisma.parent.findMany({
         where: query,
         include: {
-          students: true,
+          students:
+            role === "teacher"
+              ? {
+                  where: {
+                    class: {
+                      lessons: { some: { teacherId: user.id } },
+                    },
+                  },
+                }
+              : true,
         },
         take: ITEM_PER_PAGE,
         skip: ITEM_PER_PAGE * (p - 1),

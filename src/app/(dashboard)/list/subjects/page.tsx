@@ -6,7 +6,7 @@ import prisma from "@/lib/prisma";
 import { ITEM_PER_PAGE } from "@/lib/settings";
 import { Prisma, Subject, Teacher } from "@prisma/client";
 import Image from "next/image";
-import { auth } from "@/auth";
+import { requirePageUser } from "@/lib/authorization";
 
 type SubjectList = Subject & { teachers: Teacher[] };
 
@@ -29,8 +29,8 @@ const SubjectListPage = async ({
   searchParams: Promise<{ [key: string]: string | undefined }>;
 }) => {
   const params = await searchParams;
-  const session = await auth();
-  const role = session?.user?.role;
+  const user = await requirePageUser(["admin"]);
+  const role = user.role;
 
   const columns = [
     {

@@ -146,6 +146,9 @@ model Result {
   assignment   Assignment? @relation(fields: [assignmentId], references: [id])
   studentId    String
   student      Student     @relation(fields: [studentId], references: [id])
+
+  @@unique([studentId, examId])
+  @@unique([studentId, assignmentId])
 }
 
 model Attendance {
@@ -157,6 +160,32 @@ model Attendance {
   student   Student @relation(fields: [studentId], references: [id])
   lessonId  Int
   lesson    Lesson  @relation(fields: [lessonId], references: [id])
+
+  @@unique([studentId, lessonId, date])
+}
+
+model ResultIntegrityQuarantine {
+  id            Int      @id
+  score         Int
+  examId        Int?
+  assignmentId  Int?
+  studentId     String
+  reason        String
+  quarantinedAt DateTime @default(now())
+
+  @@map("_ResultIntegrityQuarantine")
+}
+
+model AttendanceIntegrityQuarantine {
+  id            Int      @id
+  date          DateTime
+  present       Boolean
+  studentId     String
+  lessonId      Int
+  reason        String
+  quarantinedAt DateTime @default(now())
+
+  @@map("_AttendanceIntegrityQuarantine")
 }
 
 model Event {

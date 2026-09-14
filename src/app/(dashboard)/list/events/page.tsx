@@ -6,9 +6,9 @@ import prisma from "@/lib/prisma";
 import { ITEM_PER_PAGE } from "@/lib/settings";
 import { Class, Event, Prisma } from "@prisma/client";
 import Image from "next/image";
-import { auth } from "@/auth";
+import { requirePageUser } from "@/lib/authorization";
 
-type EventList = Event & { class: Class };
+type EventList = Event & { class: Class | null };
 
 const EventListPage = async ({
   searchParams,
@@ -16,10 +16,9 @@ const EventListPage = async ({
   searchParams: Promise<{ [key: string]: string | undefined }>;
 }) => {
   const params = await searchParams;
-  const session = await auth();
-  const userId = session?.user?.id;
-  const role = session?.user?.role;
-  const currentUserId = userId;
+  const user = await requirePageUser();
+  const role = user.role;
+  const currentUserId = user.id;
 
   const columns = [
     {

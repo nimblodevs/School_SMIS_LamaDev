@@ -4,12 +4,15 @@ import CountChartContainer from "@/components/CountChartContainer";
 import EventCalendarContainer from "@/components/EventCalendarContainer";
 import FinanceChart from "@/components/FinanceChart";
 import UserCard from "@/components/UserCard";
+import { requirePageUser } from "@/lib/authorization";
 
 const AdminPage = async ({
   searchParams,
 }: {
   searchParams: Promise<{ [keys: string]: string | undefined }>;
 }) => {
+  await requirePageUser(["admin"]);
+
   return (
     <div className="p-4 flex gap-4 flex-col md:flex-row">
       {/* LEFT */}

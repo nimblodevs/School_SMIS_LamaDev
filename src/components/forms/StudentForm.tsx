@@ -15,30 +15,42 @@ import {
 import {
   studentSchema,
   StudentSchema,
-  teacherSchema,
-  TeacherSchema,
 } from "@/lib/formValidationSchemas";
 import {
   createStudent,
-  createTeacher,
   updateStudent,
-  updateTeacher,
 } from "@/lib/actions";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { CldUploadWidget } from "next-cloudinary";
+import type { Class, Grade, Parent, Student } from "@prisma/client";
+import { getSecureImageUrl } from "@/lib/cloudinary";
+
+type StudentRelatedData = {
+  grades: Pick<Grade, "id" | "level">[];
+  classes: (Pick<Class, "id" | "name" | "capacity"> & {
+    _count: { students: number };
+  })[];
+  parents: Pick<Parent, "id" | "name" | "surname">[];
+};
 
 const StudentForm = ({
   type,
-  data,
+  data: rawData,
   setOpen,
-  relatedData,
+  relatedData: rawRelatedData,
 }: {
   type: "create" | "update";
-  data?: any;
+  data?: unknown;
   setOpen: Dispatch<SetStateAction<boolean>>;
-  relatedData?: any;
+  relatedData?: unknown;
 }) => {
+  const data = rawData as Student | undefined;
+  const relatedData = (rawRelatedData ?? {
+    grades: [],
+    classes: [],
+    parents: [],
+  }) as StudentRelatedData;
   const {
     register,
     handleSubmit,
@@ -47,7 +59,7 @@ const StudentForm = ({
     resolver: zodResolver(studentSchema),
   });
 
-  const [img, setImg] = useState<any>();
+  const [img, setImg] = useState<string>();
 
   const [state, formAction] = useActionState(
     type === "create" ? createStudent : updateStudent,
@@ -59,7 +71,7 @@ const StudentForm = ({
 
   const onSubmit = handleSubmit((data) => {
     startTransition(() => {
-      formAction({ ...data, img: img?.secure_url });
+      formAction({ ...data, img: img ?? data?.img ?? undefined });
     });
   });
 
@@ -94,7 +106,7 @@ const StudentForm = ({
         <InputField
           label="Email"
           name="email"
-          defaultValue={data?.email}
+          defaultValue={data?.email ?? undefined}
           register={register}
           error={errors?.email}
         />
@@ -102,9 +114,9 @@ const StudentForm = ({
           label="Password"
           name="password"
           type="password"
-          defaultValue={data?.password}
           register={register}
           error={errors?.password}
+          inputProps={{ required: type === "create" }}
         />
       </div>
       <span className="text-xs text-gray-400 font-medium">
@@ -113,7 +125,7 @@ const StudentForm = ({
       <CldUploadWidget
         uploadPreset="school"
         onSuccess={(result, { widget }) => {
-          setImg(result.info);
+          setImg(getSecureImageUrl(result.info));
           widget.close();
         }}
       >
@@ -147,7 +159,7 @@ const StudentForm = ({
         <InputField
           label="Phone"
           name="phone"
-          defaultValue={data?.phone}
+          defaultValue={data?.phone ?? undefined}
           register={register}
           error={errors.phone}
         />
@@ -180,7 +192,7 @@ const StudentForm = ({
             {...register("parentId")}
             defaultValue={data?.parentId || ""}
           >
-            <option value="">No parent selected</option>
+            <option value="">Select a parent</option>
             {parents?.map((parent: { id: string; name: string; surname: string }) => (
               <option value={parent.id} key={parent.id}>
                 {parent.name} {parent.surname}
